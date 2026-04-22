@@ -18,5 +18,7 @@
 HAL_StatusTypeDef VL53L0X_Init(I2C_HandleTypeDef *hi2c);
 uint16_t VL53L0X_ReadDistance(I2C_HandleTypeDef *hi2c);
 void VL53L0X_StartContinous(I2C_HandleTypeDef *hi2c);
+uint16_t VL53L0X_GetDistance(I2C_HandleTypeDef *hi2c);
+uint16_t VL53L0X_ApplyFilter(uint16_t new_val);
 
 #endif

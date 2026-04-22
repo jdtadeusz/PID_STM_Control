@@ -1,4 +1,5 @@
 #include "pid_controller.h"
+#include <stdint.h>
 
 void PID_Init(PID_TypeDef *pid, float kp, float ki, float kd, float min, float max) {
     pid->Kp = kp;
@@ -30,7 +31,7 @@ float PID_Compute(PID_TypeDef *pid, float current_val) {
     pid->last_error = error;
 
     // Suma
-    float output = P + I + D;
+    float output = pid->out_min + P + I + D;
 
     if (output > pid->out_max) output = pid->out_max;
     else if (output < pid->out_min) output = pid->out_min;
@@ -41,3 +42,4 @@ float PID_Compute(PID_TypeDef *pid, float current_val) {
 void PID_SetSetpoint(PID_TypeDef *pid, float setpoint) {
     pid->setpoint = setpoint;
 }
+

@@ -49,6 +49,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     Core/Src/stm32l4xx_it.c
     Core/Src/stm32l4xx_hal_msp.c
     Core/Src/vl53l0x.c
+    Core/Src/pid_controller.c
 )
 
 # Add include paths

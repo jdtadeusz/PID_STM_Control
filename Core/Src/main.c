@@ -61,6 +61,9 @@ uint8_t read_index = 0;
 
 PID_TypeDef hpid;
 
+uint32_t current_dist_glob; // Zmienna globalna dla monitora
+float setpoint_glob;
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -119,12 +122,11 @@ int main(void)
   MX_USART2_UART_Init();
   /* USER CODE BEGIN 2 */
 
-  // HAL_StatusTypeDef status = VL53L0X_Init(&hi2c1);
-  PID_Init(&hpid, 1.5f, 0.1f, 0.05f, 800.0f, 3199.0f);
+  HAL_StatusTypeDef status = VL53L0X_Init(&hi2c1);
+  PID_Init(&hpid, 10.0f, 0.1f, 0.05f, 800.0f, 3199.0f);
   PID_SetSetpoint(&hpid, 250.0f); // 250mm
   HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_1);
 
-  uint16_t distance = 0; 
   /* USER CODE END 2 */
   
   
@@ -132,52 +134,24 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-    uint8_t sys_start = 0x01;
-    uint8_t dev_status = 0;
-    uint8_t data_raw[2] = {0, 0};
-    char uart_buf[64];
+    uint16_t current_dist = VL53L0X_GetDistance(&hi2c1);
 
-    // Startu pomiaru
-    HAL_I2C_Mem_Write(&hi2c1, VL53L0X_ADDR, 0x00, 1, &sys_start, 1, 100);
+    if (current_dist > 0) {
+        // Obliczamy PID na podstawie lokalnej zmiennej
+        float pwm_output = PID_Compute(&hpid, (float)current_dist);
 
-    // Polling
-    uint32_t tickstart = HAL_GetTick();
-    while (HAL_GetTick() - tickstart < 100) {
-        HAL_I2C_Mem_Read(&hi2c1, VL53L0X_ADDR, 0x14, 1, &dev_status, 1, 10);
-        if (dev_status & 0x01) break; 
+        // Sterujemy wentylatorem
+        __HAL_TIM_ASET_COMPARE(&htim2, TIM_CHANNEL_1, (uint32_t)pwm_output);
+
+        // --- AKTUALIZACJA DLA CUBEMONITORA ---
+        current_dist_glob = (uint32_t)current_dist;
+        setpoint_glob = hpid.setpoint; 
+        // -------------------------------------
     }
 
-    // Sprawdzanie czy dane są gotowe
-    if (dev_status & 0x01) {
-    if (HAL_I2C_Mem_Read(&hi2c1, VL53L0X_ADDR, 0x1E, 1, data_raw, 2, 100) == HAL_OK) {
-        uint16_t raw_dist = (uint16_t)((data_raw[0] << 8) | data_raw[1]);
-
-        if (raw_dist > 20 && raw_dist < 2000) { 
-            distance = smooth_filter(raw_dist);
-        } else if (raw_dist == 8191) { // 8191 to błąd 
-
-        }
-
-        int len = sprintf(uart_buf, "Dist: %u | Raw: %u | Stat: 0x%02X\r\n", 
-                          distance, raw_dist, dev_status);
-        HAL_UART_Transmit(&huart2, (uint8_t *)uart_buf, len, 100);
-        }
-    
-    uint32_t next_pwm = (uint32_t)PID_Compute(&hpid, (float)distance);
-
-    __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_1, next_pwm);
-
-    // Czyszczenie przerwania
-    uint8_t clear = 0x01;
-    HAL_I2C_Mem_Write(&hi2c1, VL53L0X_ADDR, 0x0B, 1, &clear, 1, 100);
-    }
-
-    // Częstotliwość pętli
     HAL_Delay(20); 
-
-    /* USER CODE END WHILE */
   }
-  /* USER CODE END 3 */
+
 }
 
 /**

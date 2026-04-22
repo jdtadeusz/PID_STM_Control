@@ -1,7 +1,11 @@
 #include "vl53l0x.h"
+#include "i2c.h"
 #include "stm32l4xx_hal_def.h"
 #include "stm32l4xx_hal_i2c.h"
 #include <stdint.h>
+
+static uint16_t readings[5];
+static uint8_t read_index = 0;
 
 HAL_StatusTypeDef VL53L0X_Init(I2C_HandleTypeDef *hi2c) {
     uint8_t val;
@@ -59,3 +63,55 @@ void VL53L0X_StartContinous(I2C_HandleTypeDef *hi2c) {
     uint8_t start_cmd = 0x02; // tryb ciągły
     HAL_I2C_Master_Transmit(hi2c, VL53L0X_ADDR, &start_cmd, 1, 100);
 }
+
+uint16_t VL53L0X_GetDistance(I2C_HandleTypeDef *hi2c) {
+    uint8_t start_cmd = 0x01;
+    uint8_t status = 0;
+    uint8_t data[2];
+
+    // 1. Wyzwalanie pomiaru (Single Shot)
+    // Piszemy 0x01 do rejestru SYSRANGE_START (0x00)
+    if(HAL_I2C_Mem_Write(hi2c, VL53L0X_ADDR, 0x00, 1, &start_cmd, 1, 100) != HAL_OK) return 0;
+
+    // 2. Czekaj na bit "Start" aż zgaśnie (czujnik przyjął polecenie)
+    // To jest kluczowe! Czujnik musi przetrawić komendę startu.
+    uint32_t timeout = HAL_GetTick();
+    while (HAL_GetTick() - timeout < 50) {
+        HAL_I2C_Mem_Read(hi2c, VL53L0X_ADDR, 0x00, 1, &status, 1, 50);
+        if (!(status & 0x01)) break; 
+    }
+
+    // 3. Czekaj na gotowość danych (Interrupt Status)
+    // Rejestr RESULT_INTERRUPT_STATUS (0x13)
+    timeout = HAL_GetTick();
+    while (HAL_GetTick() - timeout < 100) {
+        HAL_I2C_Mem_Read(hi2c, VL53L0X_ADDR, 0x13, 1, &status, 1, 100);
+        if (status & 0x07) break; // Bit 0, 1 lub 2 oznacza gotowość
+    }
+
+    // 4. Odczytaj 2 bajty dystansu z RESULT_RANGE_STATUS (0x14) + offset 10 bajtów
+    // Czyli czytamy od 0x1E (0x14 + 10 bajtów to dokładnie 0x1E - tu miałeś rację!)
+    if (HAL_I2C_Mem_Read(hi2c, VL53L0X_ADDR, 0x1E, 1, data, 2, 100) == HAL_OK) {
+        uint16_t raw_dist = (uint16_t)((data[0] << 8) | data[1]);
+
+        // 5. Czyścimy przerwanie, żeby pozwolić na kolejny pomiar
+        uint8_t clear = 0x01;
+        HAL_I2C_Mem_Write(hi2c, VL53L0X_ADDR, 0x0B, 1, &clear, 1, 100);
+
+        if (raw_dist > 20 && raw_dist < 2000) {
+            return VL53L0X_ApplyFilter(raw_dist);
+        }
+    }
+
+    return 0;
+}
+
+uint16_t VL53L0X_ApplyFilter(uint16_t new_val) {
+    readings[read_index] = new_val;
+    read_index = (read_index + 1) % 5;
+    uint32_t sum = 0;
+    for(int i=0; i < 5; i++) sum += readings[i];
+    
+    return (uint16_t)(sum / 5);
+}
+
