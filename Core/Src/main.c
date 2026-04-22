@@ -23,6 +23,7 @@
 #include "stm32l4xx_hal.h"
 #include "stm32l4xx_hal_def.h"
 #include "stm32l4xx_hal_i2c.h"
+#include "stm32l4xx_hal_tim.h"
 #include "stm32l4xx_hal_uart.h"
 #include "tim.h"
 #include "usart.h"
@@ -33,6 +34,7 @@
 #include "vl53l0x.h"
 #include <stdint.h>
 #include <stdio.h>
+#include "pid_controller.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -56,6 +58,8 @@
 
 uint16_t readings[FILTER_SIZE];
 uint8_t read_index = 0;
+
+PID_TypeDef hpid;
 
 /* USER CODE END PV */
 
@@ -115,11 +119,14 @@ int main(void)
   MX_USART2_UART_Init();
   /* USER CODE BEGIN 2 */
 
-  HAL_StatusTypeDef status = VL53L0X_Init(&hi2c1);
+  // HAL_StatusTypeDef status = VL53L0X_Init(&hi2c1);
+  PID_Init(&hpid, 1.5f, 0.1f, 0.05f, 800.0f, 3199.0f);
+  PID_SetSetpoint(&hpid, 250.0f); // 250mm
+  HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_1);
 
+  uint16_t distance = 0; 
   /* USER CODE END 2 */
   
-  uint16_t distance = 0; 
   
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
@@ -156,13 +163,17 @@ int main(void)
         HAL_UART_Transmit(&huart2, (uint8_t *)uart_buf, len, 100);
         }
     
+    uint32_t next_pwm = (uint32_t)PID_Compute(&hpid, (float)distance);
+
+    __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_1, next_pwm);
+
     // Czyszczenie przerwania
     uint8_t clear = 0x01;
     HAL_I2C_Mem_Write(&hi2c1, VL53L0X_ADDR, 0x0B, 1, &clear, 1, 100);
     }
 
     // Częstotliwość pętli
-    HAL_Delay(50); 
+    HAL_Delay(20); 
 
     /* USER CODE END WHILE */
   }
