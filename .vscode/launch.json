@@ -8,7 +8,12 @@
             "request": "launch",
             "type": "cortex-debug",
             "runToEntryPoint": "main",
-            "servertype": "stlink"
+            "servertype": "stlink",
+            "liveWatch": {
+	            "enabled": true,
+	            "samplesPerSecond": 4   
+	        }
         }
+    
     ]
 }

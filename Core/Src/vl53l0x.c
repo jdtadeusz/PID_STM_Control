@@ -47,7 +47,7 @@ uint16_t VL53L0X_ReadDistance(I2C_HandleTypeDef *hi2c) {
     if (!(status_reg & 0x01)) return 0; // Jeśli bit 0 jest czysty, dane nie są gotowe
 
 
-    if (HAL_I2C_Mem_Read(hi2c, VL53L0X_ADDR, REG_RESULT_RANGE_VAL, 1, data, 1, 50) == HAL_OK) {
+    if (HAL_I2C_Mem_Read(hi2c, VL53L0X_ADDR, REG_RESULT_RANGE_VAL, 1, data, 2, 50) == HAL_OK) {
         dist = (uint16_t)((data[0] << 8) | data[1]);
     }
 
@@ -60,8 +60,9 @@ uint16_t VL53L0X_ReadDistance(I2C_HandleTypeDef *hi2c) {
 }
 
 void VL53L0X_StartContinous(I2C_HandleTypeDef *hi2c) {
-    uint8_t start_cmd = 0x02; // tryb ciągły
-    HAL_I2C_Master_Transmit(hi2c, VL53L0X_ADDR, &start_cmd, 1, 100);
+    uint8_t start_cmd = 0x02; // 0x02 to Continuous Mode
+    // Zapisujemy 0x02 do rejestru 0x00
+    HAL_I2C_Mem_Write(hi2c, VL53L0X_ADDR, 0x00, 1, &start_cmd, 1, 100);
 }
 
 uint16_t VL53L0X_GetDistance(I2C_HandleTypeDef *hi2c) {

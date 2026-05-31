@@ -44,7 +44,8 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-#define FILTER_SIZE 5
+#define FILTER_SIZE 3
+#define TUBE_LENGTH_MM 500.0f
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -68,6 +69,7 @@ float setpoint_glob;
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
+int _write(int file, char *ptr, int len);
 /* USER CODE BEGIN PFP */
 
 // Filtr do eliminacji szumów czujnika
@@ -120,39 +122,82 @@ int main(void)
   MX_I2C1_Init();
   MX_TIM2_Init();
   MX_USART2_UART_Init();
-  /* USER CODE BEGIN 2 */
+/* USER CODE BEGIN 2 */
 
-  HAL_StatusTypeDef status = VL53L0X_Init(&hi2c1);
-  PID_Init(&hpid, 10.0f, 0.1f, 0.05f, 800.0f, 3199.0f);
-  PID_SetSetpoint(&hpid, 250.0f); // 250mm
+  // 1. Inicjalizacja z zabezpieczeniem
+  if (VL53L0X_Init(&hi2c1) != HAL_OK) {
+    Error_Handler(); 
+  }
+  
+  // 2. Uruchomienie trybu ciągłego (po poprawieniu vl53l0x.c będzie działać!)
+  VL53L0X_StartContinous(&hi2c1);
+
+  PID_Init(&hpid, 6.0f, 0.05f, 2.5f, -1000.0f, 1000.0f);
+  PID_SetSetpoint(&hpid, 250.0f); 
   HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_1);
 
-  /* USER CODE END 2 */
+  uint16_t last_valid_filtered_dist = 250;
+  float base_feedforward = 1550.0f;
   
+  uint32_t last_time = HAL_GetTick();
+  uint32_t last_i2c_poll = HAL_GetTick(); // Zmienna dla przepustnicy
+
+  /* USER CODE END 2 */
   
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-    uint16_t current_dist = VL53L0X_GetDistance(&hi2c1);
-
-    if (current_dist > 0) {
-        // Obliczamy PID na podstawie lokalnej zmiennej
-        float pwm_output = PID_Compute(&hpid, (float)current_dist);
-
-        // Sterujemy wentylatorem
-        __HAL_TIM_ASET_COMPARE(&htim2, TIM_CHANNEL_1, (uint32_t)pwm_output);
-
-        // --- AKTUALIZACJA DLA CUBEMONITORA ---
-        current_dist_glob = (uint32_t)current_dist;
-        setpoint_glob = hpid.setpoint; 
-        // -------------------------------------
+    // 1. SYSTEM RATUNKOWY I2C (Ochrona przed spadkami napięć od wentylatora)
+    // 1. SYSTEM RATUNKOWY I2C (Ochrona przed spadkami napięć od wentylatora)
+    if (HAL_I2C_GetError(&hi2c1) != HAL_I2C_ERROR_NONE) {
+        HAL_I2C_DeInit(&hi2c1); // Ugaszenie peryferium
+        HAL_I2C_Init(&hi2c1);   // Ponowny rozruch
+        HAL_Delay(10);          // Chwila na ustabilizowanie napięć
     }
 
-    HAL_Delay(20); 
-  }
+    // 2. Przepustnica czasowa - odpytujemy bezpiecznie co 30 ms
+    if (HAL_GetTick() - last_i2c_poll >= 30) {
+        last_i2c_poll = HAL_GetTick();
 
-}
+        // UŻYWAMY TWOJEJ ORYGINALNEJ, DZIAŁAJĄCEJ FUNKCJI!
+        uint16_t raw_dist = VL53L0X_GetDistance(&hi2c1);
+
+        if (raw_dist > 30 && raw_dist < 500) {
+            
+            last_valid_filtered_dist = smooth_filter(raw_dist);
+
+            // Pomiar dt 
+            uint32_t now = HAL_GetTick();
+            float dt = (float)(now - last_time) / 1000.0f;
+            last_time = now;
+            
+            if (dt <= 0.001f) dt = 0.001f;
+            PID_SetDt(&hpid, dt);
+
+            float current_distance = (float)last_valid_filtered_dist;
+            float pid_correction = PID_Compute(&hpid, current_distance);
+
+            // ZNAK PLUS! (Twój algorytm sam generuje już ujemną korektę przy suficie)
+            float final_pwm = base_feedforward + pid_correction;
+
+            // Nasycenie (Saturation)
+            if (final_pwm > 3199.0f) final_pwm = 3199.0f;
+            if (final_pwm < 0.0f)    final_pwm = 0.0f;
+
+            __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_1, (uint32_t)final_pwm);
+
+            printf("SP:%d, Dist:%d, PWM:%d, dt:%d ms\r\n", 
+                  (int)hpid.setpoint, (int)current_distance, (int)final_pwm, (int)(dt * 1000.0f));
+        }
+    }
+  }
+  /* USER CODE END WHILE */
+  }
+    // Pętla kręci się swobodnie, procesor może tu robić inne rzeczy
+ 
+
+
 
 /**
   * @brief System Clock Configuration
@@ -205,7 +250,10 @@ void SystemClock_Config(void)
 
 /* USER CODE BEGIN 4 */
 
-
+int _write(int file, char *ptr, int len) {
+    HAL_UART_Transmit(&huart2, (uint8_t*)ptr, len, HAL_MAX_DELAY);
+    return len;
+}
 
 /* USER CODE END 4 */
 

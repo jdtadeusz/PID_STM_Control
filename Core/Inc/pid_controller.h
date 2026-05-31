@@ -12,11 +12,12 @@ typedef struct{
     // Stan wewn.
     float setpoint;
     float integral; 
-    float last_error; 
+    float last_error;
+    float last_measurement;
 
     // Ograniczenia 
     float out_min; 
-    float out_max; 
+    float out_max;
     float integral_limit; 
 
     // Czas próbkowania 
@@ -26,5 +27,6 @@ typedef struct{
 void PID_Init(PID_TypeDef *pid, float kp, float ki, float kd, float min, float max);
 float PID_Compute(PID_TypeDef *pid, float current_val);
 void PID_SetSetpoint(PID_TypeDef *pid, float setpoint);
+void PID_SetDt(PID_TypeDef *pid, float dt);
 
 #endif
