@@ -20,5 +20,6 @@ uint16_t VL53L0X_ReadDistance(I2C_HandleTypeDef *hi2c);
 void VL53L0X_StartContinous(I2C_HandleTypeDef *hi2c);
 uint16_t VL53L0X_GetDistance(I2C_HandleTypeDef *hi2c);
 uint16_t VL53L0X_ApplyFilter(uint16_t new_val);
+uint16_t VL53L0X_ReadContinuousFast(I2C_HandleTypeDef *hi2c);
 
 #endif

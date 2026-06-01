@@ -99,8 +99,8 @@ uint16_t VL53L0X_GetDistance(I2C_HandleTypeDef *hi2c) {
         uint8_t clear = 0x01;
         HAL_I2C_Mem_Write(hi2c, VL53L0X_ADDR, 0x0B, 1, &clear, 1, 100);
 
-        if (raw_dist > 20 && raw_dist < 2000) {
-            return VL53L0X_ApplyFilter(raw_dist);
+        if (raw_dist > 45 && raw_dist < 700) {
+            return raw_dist;
         }
     }
 
@@ -116,3 +116,26 @@ uint16_t VL53L0X_ApplyFilter(uint16_t new_val) {
     return (uint16_t)(sum / 5);
 }
 
+
+uint16_t VL53L0X_ReadContinuousFast(I2C_HandleTypeDef *hi2c) {
+    uint8_t status = 0;
+    uint8_t data[2];
+
+    // 1. Błyskawiczne sprawdzenie gotowości (Timeout tylko 2 ms!)
+    if (HAL_I2C_Mem_Read(hi2c, VL53L0X_ADDR, 0x13, 1, &status, 1, 2) != HAL_OK) return 0;
+    
+    // Jeśli flaga gotowości (bity 0-2) nie jest podniesiona, uciekamy.
+    if ((status & 0x07) == 0) return 0; 
+
+    // 2. Czytamy gotowy wynik z rejestru 0x1E
+    if (HAL_I2C_Mem_Read(hi2c, VL53L0X_ADDR, 0x1E, 1, data, 2, 2) == HAL_OK) {
+        uint16_t dist = (uint16_t)((data[0] << 8) | data[1]);
+
+        // 3. Czyścimy przerwanie, by czujnik robił kolejny pomiar
+        uint8_t clear = 0x01;
+        HAL_I2C_Mem_Write(hi2c, VL53L0X_ADDR, 0x0B, 1, &clear, 1, 2);
+
+        return dist;
+    }
+    return 0;
+}
