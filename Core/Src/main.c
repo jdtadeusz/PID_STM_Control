@@ -219,7 +219,6 @@ int main(void)
             float current_distance = (float)last_valid_filtered_dist;
             float pid_correction = PID_Compute(&hpid, current_distance);
 
-            // BARDZO WAŻNE: ZNAK MINUS (poprawna fizyka!)
             float final_pwm = base_feedforward + pid_correction;
 
             // Nasycenie (Saturation)
@@ -228,7 +227,7 @@ int main(void)
 
             // NOWOŚĆ: Slew Rate Limiter (Miękki start i hamowanie)
             static float current_actual_pwm = 1850.0f; // Pamięta aktualny stan sprzętu
-            float max_pwm_step = 10.0f; // Maksymalna zmiana PWM co 50ms (dostosuj: 40-100)
+            float max_pwm_step = 40.0f; // Maksymalna zmiana PWM co 50ms (dostosuj: 40-100)
 
             if (final_pwm > current_actual_pwm + max_pwm_step) {
                 current_actual_pwm += max_pwm_step; // Płynne przyspieszanie
