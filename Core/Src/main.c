@@ -132,12 +132,15 @@ int main(void)
   // 2. Uruchomienie trybu ciągłego (po poprawieniu vl53l0x.c będzie działać!)
   VL53L0X_StartContinous(&hi2c1);
 
-  PID_Init(&hpid, 2.0f, 0.0f, 0.35f, -1000.0f, 1000.0f);
-  PID_SetSetpoint(&hpid, 200.0f); 
+  // Ku = 1.05
+  // Cykl = 2,45 (49*0,05)
+  PID_Init(&hpid, 1.8f, 0.005f, 0.8f, -400.0f, 400.0f); 
+  PID_SetSetpoint(&hpid, 135.0f); 
   HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_1);
 
-  uint16_t last_valid_filtered_dist;
-  float base_feedforward = 1800.0f;
+  // 2050,5 - minimalna wartość żeby podnieść piłeczke z obciazeniem
+  // 1265,0 - minimalna wartość żeby podnieść piłeczkę bez obciążenia
+  float base_feedforward = 1310.0f;
   
   uint32_t last_time = HAL_GetTick();
   uint32_t last_i2c_poll = HAL_GetTick(); // Zmienna dla przepustnicy
@@ -148,113 +151,51 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-    /*
-    // 1. SYSTEM RATUNKOWY I2C (Ochrona przed spadkami napięć od wentylatora)
-    // 1. SYSTEM RATUNKOWY I2C (Ochrona przed spadkami napięć od wentylatora)
-    if (HAL_I2C_GetError(&hi2c1) != HAL_I2C_ERROR_NONE) {
-        HAL_I2C_DeInit(&hi2c1); // Ugaszenie peryferium
-        HAL_I2C_Init(&hi2c1);   // Ponowny rozruch
-        HAL_Delay(10);          // Chwila na ustabilizowanie napięć
-    }
-
-    // 2. Przepustnica czasowa - odpytujemy bezpiecznie co 30 ms
-    if (HAL_GetTick() - last_i2c_poll >= 30) {
-        last_i2c_poll = HAL_GetTick();
-
-        // UŻYWAMY TWOJEJ ORYGINALNEJ, DZIAŁAJĄCEJ FUNKCJI!
-        uint16_t raw_dist = VL53L0X_GetDistance(&hi2c1);
-
-        if (raw_dist > 45 && raw_dist < 700) {
-            
-            last_valid_filtered_dist = raw_dist;
-
-            // Pomiar dt 
-            uint32_t now = HAL_GetTick();
-            float dt = (float)(now - last_time) / 1000.0f;
-            last_time = now;
-            
-            if (dt <= 0.001f) dt = 0.001f;
-            PID_SetDt(&hpid, dt);
-
-            float current_distance = (float)last_valid_filtered_dist;
-            float pid_correction = PID_Compute(&hpid, current_distance);
-
-            // ZNAK PLUS! (Twój algorytm sam generuje już ujemną korektę przy suficie)
-            float final_pwm = base_feedforward - pid_correction;
-
-            // Nasycenie (Saturation)
-            if (final_pwm > 3199.0f) final_pwm = 3199.0f;
-            if (final_pwm < 0.0f)    final_pwm = 0.0f;
-
-            __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_1, (uint32_t)final_pwm);
-
-            printf("SP:%d, Dist:%d, PWM:%d, dt:%d ms\r\n", 
-                  (int)hpid.setpoint, (int)current_distance, (int)final_pwm, (int)(dt * 1000.0f));
-        }
-                  */
     if (HAL_I2C_GetError(&hi2c1) != HAL_I2C_ERROR_NONE) {
         HAL_I2C_DeInit(&hi2c1);
         HAL_I2C_Init(&hi2c1);  
         HAL_Delay(10);         
     }
 
-    // ODPYTYWANIE CO 2 MS (Funkcja ReadContinuousFast nie zatrzyma procesora!)
-    if (HAL_GetTick() - last_i2c_poll >= 2) {
+    if (HAL_GetTick() - last_i2c_poll >= 5) { 
         last_i2c_poll = HAL_GetTick();
 
-        // UŻYWAMY NOWEJ, NIEBLOKUJĄCEJ FUNKCJI
         uint16_t raw_dist = VL53L0X_ReadContinuousFast(&hi2c1);
+
+        // HAMULEC BEZPIECZEŃSTWA (Dla strefy martwej czujnika)
+        if (raw_dist > 0 && raw_dist <= 45) {
+            __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_1, 1000); // Twarde odcięcie wiatru
+            continue; 
+        }
 
         if (raw_dist > 45 && raw_dist < 600) {
             
-            last_valid_filtered_dist = raw_dist; // Czysty sygnał
-
             uint32_t now = HAL_GetTick();
             float dt = (float)(now - last_time) / 1000.0f;
             last_time = now;
-            
             if (dt <= 0.001f) dt = 0.001f;
+
             PID_SetDt(&hpid, dt);
-
-            float current_distance = (float)last_valid_filtered_dist;
-            float pid_correction = PID_Compute(&hpid, current_distance);
-
+            
+            // Obliczenia używają Twojej naprawionej biblioteki!
+            float pid_correction = PID_Compute(&hpid, (float)raw_dist);
             float final_pwm = base_feedforward + pid_correction;
 
-            // Nasycenie (Saturation)
-            if (final_pwm > 3199.0f) final_pwm = 3199.0f;
-            if (final_pwm < 0.0f)    final_pwm = 0.0f;
+            if (final_pwm > 1600.0f) final_pwm = 1600.0f; // Limit górny sprzętowy
+            if (final_pwm < 1000.0f) final_pwm = 1000.0f; // Limit dolny sprzętowy
 
-            // NOWOŚĆ: Slew Rate Limiter (Miękki start i hamowanie)
-            static float current_actual_pwm = 1850.0f; // Pamięta aktualny stan sprzętu
-            float max_pwm_step = 40.0f; // Maksymalna zmiana PWM co 50ms (dostosuj: 40-100)
+            // Bezpośrednie wysterowanie bez Slew Rate'ów
+            __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_1, (uint32_t)final_pwm);
 
-            if (final_pwm > current_actual_pwm + max_pwm_step) {
-                current_actual_pwm += max_pwm_step; // Płynne przyspieszanie
-            } 
-            else if (final_pwm < current_actual_pwm - max_pwm_step) {
-                current_actual_pwm -= max_pwm_step; // Płynne zwalnianie
-            } 
-            else {
-                current_actual_pwm = final_pwm; // PID jest w dozwolonym limicie
-            }
-
-            // Fizyczne wysterowanie silnika używa teraz wygładzonego sygnału
-            __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_1, (uint32_t)current_actual_pwm);
-
-            printf("SP:%d, Dist:%d, PWM:%d, dt:%d ms\r\n", 
-                  (int)hpid.setpoint, (int)current_distance, (int)final_pwm, (int)(dt * 1000.0f));
+            printf("SP:%d, Dist:%d, Corr:%d, PWM:%d, dt:%d ms\r\n", 
+                  (int)hpid.setpoint, (int)raw_dist, (int)pid_correction, (int)final_pwm, (int)(dt * 1000.0f));
         }
     }
-    }
+  }
   
   /* USER CODE END WHILE */
   }
-    // Pętla kręci się swobodnie, procesor może tu robić inne rzeczy
  
-
-
-
 /**
   * @brief System Clock Configuration
   * @retval None

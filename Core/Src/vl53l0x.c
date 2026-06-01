@@ -99,7 +99,7 @@ uint16_t VL53L0X_GetDistance(I2C_HandleTypeDef *hi2c) {
         uint8_t clear = 0x01;
         HAL_I2C_Mem_Write(hi2c, VL53L0X_ADDR, 0x0B, 1, &clear, 1, 100);
 
-        if (raw_dist > 45 && raw_dist < 700) {
+        if (raw_dist > 40 && raw_dist < 700) {
             return raw_dist;
         }
     }
