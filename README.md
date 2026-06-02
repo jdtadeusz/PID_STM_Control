@@ -1,3 +1,5 @@
+Projekt embedded do sterowania za pomocą regulatora PID lewitującą piłeczką na stałym poziomie. 
+
 # PID_STM_Control: System Lewitacji Aerodynamicznej
 
 ![Status: Działa](https://img.shields.io/badge/Status-Dzia%C5%82a-success)
