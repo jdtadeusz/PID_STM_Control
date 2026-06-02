@@ -5,7 +5,7 @@
 ![Platforma: STM32](https://img.shields.io/badge/Platforma-STM32-orange)
 
 *(W tym miejscu dodaj krótkiego GIF-a pokazującego lewitującą piłeczkę i działający wykres w Pythonie)*
-`![Demo lewitacji](link_do_twojego_gifa.gif)`
+`![Demo lewitacji]([link_do_twojego_gifa.gif](https://imgflip.com/gif/atc3k2))`
 
 ## Opis Projektu
 
