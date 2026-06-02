@@ -62,7 +62,7 @@ uint8_t read_index = 0;
 
 PID_TypeDef hpid;
 
-uint32_t current_dist_glob; // Zmienna globalna dla monitora
+uint32_t current_dist_glob; // Global variable for the monitor
 float setpoint_glob;
 
 /* USER CODE END PV */
@@ -72,7 +72,7 @@ void SystemClock_Config(void);
 int _write(int file, char *ptr, int len);
 /* USER CODE BEGIN PFP */
 
-// Filtr do eliminacji szumów czujnika - nieużywany
+// Sensor noise elimination filter - unused
 uint16_t smooth_filter(uint16_t new_val) {
     readings[read_index] = new_val;
     read_index = (read_index + 1) % FILTER_SIZE;
@@ -124,32 +124,34 @@ int main(void)
   MX_USART2_UART_Init();
 /* USER CODE BEGIN 2 */
 
+  // 1. Initialization with safety check
   if (VL53L0X_Init(&hi2c1) != HAL_OK) {
     Error_Handler(); 
   }
   
-  // tryb ciągły
+  // Continuous measurement mode
   VL53L0X_StartContinous(&hi2c1);
 
-  // Dla Kp = 0.8 - oscylacje zaczynajace od -50 + 80, aż do -20 + 20
+  // For Kp = 0.8: initial oscillations from -50 to +80, dampening down to -20 to +20
   PID_Init(&hpid, 0.8f, 0.007f, 0.05f, -100.0f, 200.0f);
   PID_SetSetpoint(&hpid, 190.0f); 
   HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_1);
 
-  // 2050,5 - minimalna wartość żeby podnieść piłeczke z obciazeniem
-  // 1265,0 - minimalna wartość żeby podnieść piłeczkę bez obciążenia
+  // 2050.5 - Minimum value required to lift a loaded ball
+  // 1265.0 - Minimum value required to lift an unloaded ball
   
   uint32_t last_time = HAL_GetTick();
-  uint32_t last_i2c_poll = HAL_GetTick(); // Zmienna dla przepustnicy
+  uint32_t last_i2c_poll = HAL_GetTick(); // Throttle variable for I2C polling
 
-// Dynamiczna baza PWM (Kompensacja nieliniowości rury)
+// Dynamic PWM feedforward (Tube non-linearity compensation)
 float Get_Dynamic_Feedforward(float setpoint) {
-    float SP_low  = 240.0f;  float PWM_low  = 1290.0f;  // Dół rury
-    float SP_high =  60.0f;  float PWM_high = 1305.0f;  // Góra rury
+    float SP_low  = 240.0f;  float PWM_low  = 1290.0f;  // Bottom of the tube
+    float SP_high =  60.0f;  float PWM_high = 1305.0f;  // Top of the tube
 
     if (setpoint >= SP_low) return PWM_low;
     if (setpoint <= SP_high) return PWM_high;
 
+    // Linear interpolation
     float t = (setpoint - SP_low) / (SP_high - SP_low);
     return PWM_low + t * (PWM_high - PWM_low);
 }
@@ -159,23 +161,26 @@ float Get_Dynamic_Feedforward(float setpoint) {
   /* USER CODE BEGIN WHILE */
   while (1)
   {
+    // I2C Error recovery handler
     if (HAL_I2C_GetError(&hi2c1) != HAL_I2C_ERROR_NONE) {
         HAL_I2C_DeInit(&hi2c1);
         HAL_I2C_Init(&hi2c1);  
         HAL_Delay(10);         
     }
 
+    // 5ms Polling rate throttle
     if (HAL_GetTick() - last_i2c_poll >= 5) { 
         last_i2c_poll = HAL_GetTick();
 
         uint16_t raw_dist = VL53L0X_ReadContinuousFast(&hi2c1);
 
-        // martwa strefa
+        // Hardware dead-zone safety override
         if (raw_dist > 0 && raw_dist <= 45) {
-            __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_1, 1000); // Twarde odcięcie wiatru
+            __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_1, 1000); // Hard cutoff of the airflow
             continue; 
         }
 
+        // Valid measurement range
         if (raw_dist > 45 && raw_dist < 600) {
             
             uint32_t now = HAL_GetTick();
@@ -191,11 +196,13 @@ float Get_Dynamic_Feedforward(float setpoint) {
 
             float final_pwm = dynamic_base + pid_correction;
 
-            // Nasycenie sprzętowe
+            // Hardware output saturation limits
             if (final_pwm > 1600.0f) final_pwm = 1600.0f; 
             if (final_pwm < 1000.0f) final_pwm = 1000.0f; 
 
+            // Direct actuator update (no slew rate filtering)
             __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_1, (uint32_t)final_pwm);
+            
             printf("SP:%d, Dist:%d, Corr:%d, PWM:%d, dt:%d ms\r\n", 
                   (int)hpid.setpoint, (int)raw_dist, (int)pid_correction, (int)final_pwm, (int)(dt * 1000.0f));
         }
@@ -280,7 +287,7 @@ void Error_Handler(void)
 #ifdef USE_FULL_ASSERT
 /**
   * @brief  Reports the name of the source file and the source line number
-  *         where the assert_param error has occurred.
+  * where the assert_param error has occurred.
   * @param  file: pointer to the source file name
   * @param  line: assert_param error line source number
   * @retval None
