@@ -4,14 +4,14 @@
 ![Język: C](https://img.shields.io/badge/J%C4%99zyk-C-blue)
 ![Platforma: STM32](https://img.shields.io/badge/Platforma-STM32-orange)
 
-*(W tym miejscu dodaj krótkiego GIF-a pokazującego lewitującą piłeczkę i działający wykres w Pythonie)*
-`![Demo lewitacji]([link_do_twojego_gifa.gif](https://imgflip.com/gif/atc3k2))`
+<img width="260" height="462" alt="PID_Stm32" src="https://github.com/user-attachments/assets/bed42bfd-7802-4ef6-9be8-a41be049812e" />
+
 
 ## Opis Projektu
 
-PID_STM_Control to zaawansowany projekt embedded demonstrujący nieliniową regulację PID na mikrokontrolerze STM32. Celem układu jest precyzyjna, stabilna lewitacja bardzo lekkiej piłeczki (ok. 2g) wewnątrz 35-milimetrowej rury aerodynamicznej przy wykorzystaniu przemysłowego wentylatora sterowanego sygnałem PWM.
+PID_STM_Control to projekt embedded demonstrujący nieliniową regulację PID na mikrokontrolerze STM32. Celem układu jest precyzyjna, stabilna lewitacja bardzo lekkiej piłeczki (ok. 3g) wewnątrz 35-milimetrowej rury aerodynamicznej przy wykorzystaniu przemysłowego wentylatora sterowanego sygnałem PWM.
 
-Projekt rozwiązuje szereg rzeczywistych problemów inżynierskich, takich jak szum optyczny czujników, asymetria grawitacyjna czy nieliniowa dynamika płynów (tzw. efekt "tłoka" w górnej części rury).
+Projekt rozwiązuje szereg rzeczywistych problemów inżynierskich, takich jak szum optyczny czujników, asymetria grawitacyjna czy nieliniowa dynamika płynów.
 
 ## Rozwiązania Inżynierskie i Funkcjonalności
 
@@ -26,14 +26,9 @@ Układ sterowania został napisany od zera i zawiera mechanizmy spotykane w prze
 ## Architektura i Sprzęt
 
 * **Mikrokontroler:** STM32 (konfiguracja przez HAL)
-* **Aktuator:** Wentylator przemysłowy (sterowanie Timer PWM bezpośrednio do rejestrów)
+* **Aktuator:** Wentylator przemysłowy - ARCTIC S8038-10K z wbudowanym sterownikiem (sterowanie Timer PWM bezpośrednio do rejestrów)
 * **Czujnik:** Laserowy sensor odległości Time-of-Flight VL53L0X (komunikacja I2C, odczyt Continuous Fast)
 * **Telemetria:** Dwukierunkowa komunikacja UART z komputerem PC.
-
-## Konstrukcja Fizyczna
-
-*(W tym miejscu dodaj zdjęcie swojej rury, czujnika na górze i wentylatora na dole)*
-`![Konstrukcja mechaniczna](link_do_zdjecia.jpg)`
 
 ## Telemetria w Czasie Rzeczywistym
 
