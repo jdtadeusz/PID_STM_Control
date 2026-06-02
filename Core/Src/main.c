@@ -72,7 +72,7 @@ void SystemClock_Config(void);
 int _write(int file, char *ptr, int len);
 /* USER CODE BEGIN PFP */
 
-// Filtr do eliminacji szumów czujnika
+// Filtr do eliminacji szumów czujnika - nieużywany
 uint16_t smooth_filter(uint16_t new_val) {
     readings[read_index] = new_val;
     read_index = (read_index + 1) % FILTER_SIZE;
@@ -124,27 +124,35 @@ int main(void)
   MX_USART2_UART_Init();
 /* USER CODE BEGIN 2 */
 
-  // 1. Inicjalizacja z zabezpieczeniem
   if (VL53L0X_Init(&hi2c1) != HAL_OK) {
     Error_Handler(); 
   }
   
-  // 2. Uruchomienie trybu ciągłego (po poprawieniu vl53l0x.c będzie działać!)
+  // tryb ciągły
   VL53L0X_StartContinous(&hi2c1);
 
-  // Ku = 1.05
-  // Cykl = 2,45 (49*0,05)
-  PID_Init(&hpid, 1.8f, 0.005f, 0.8f, -400.0f, 400.0f); 
-  PID_SetSetpoint(&hpid, 135.0f); 
+  // Dla Kp = 0.8 - oscylacje zaczynajace od -50 + 80, aż do -20 + 20
+  PID_Init(&hpid, 0.8f, 0.007f, 0.05f, -100.0f, 200.0f);
+  PID_SetSetpoint(&hpid, 190.0f); 
   HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_1);
 
   // 2050,5 - minimalna wartość żeby podnieść piłeczke z obciazeniem
   // 1265,0 - minimalna wartość żeby podnieść piłeczkę bez obciążenia
-  float base_feedforward = 1310.0f;
   
   uint32_t last_time = HAL_GetTick();
   uint32_t last_i2c_poll = HAL_GetTick(); // Zmienna dla przepustnicy
 
+// Dynamiczna baza PWM (Kompensacja nieliniowości rury)
+float Get_Dynamic_Feedforward(float setpoint) {
+    float SP_low  = 240.0f;  float PWM_low  = 1290.0f;  // Dół rury
+    float SP_high =  60.0f;  float PWM_high = 1305.0f;  // Góra rury
+
+    if (setpoint >= SP_low) return PWM_low;
+    if (setpoint <= SP_high) return PWM_high;
+
+    float t = (setpoint - SP_low) / (SP_high - SP_low);
+    return PWM_low + t * (PWM_high - PWM_low);
+}
   /* USER CODE END 2 */
   
   /* Infinite loop */
@@ -162,7 +170,7 @@ int main(void)
 
         uint16_t raw_dist = VL53L0X_ReadContinuousFast(&hi2c1);
 
-        // HAMULEC BEZPIECZEŃSTWA (Dla strefy martwej czujnika)
+        // martwa strefa
         if (raw_dist > 0 && raw_dist <= 45) {
             __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_1, 1000); // Twarde odcięcie wiatru
             continue; 
@@ -171,22 +179,23 @@ int main(void)
         if (raw_dist > 45 && raw_dist < 600) {
             
             uint32_t now = HAL_GetTick();
-            float dt = (float)(now - last_time) / 1000.0f;
+            float dt = (float)(now - last_time) / 1300.0f;
             last_time = now;
             if (dt <= 0.001f) dt = 0.001f;
 
             PID_SetDt(&hpid, dt);
-            
-            // Obliczenia używają Twojej naprawionej biblioteki!
+
+            float dynamic_base = Get_Dynamic_Feedforward(hpid.setpoint);
+      
             float pid_correction = PID_Compute(&hpid, (float)raw_dist);
-            float final_pwm = base_feedforward + pid_correction;
 
-            if (final_pwm > 1600.0f) final_pwm = 1600.0f; // Limit górny sprzętowy
-            if (final_pwm < 1000.0f) final_pwm = 1000.0f; // Limit dolny sprzętowy
+            float final_pwm = dynamic_base + pid_correction;
 
-            // Bezpośrednie wysterowanie bez Slew Rate'ów
+            // Nasycenie sprzętowe
+            if (final_pwm > 1600.0f) final_pwm = 1600.0f; 
+            if (final_pwm < 1000.0f) final_pwm = 1000.0f; 
+
             __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_1, (uint32_t)final_pwm);
-
             printf("SP:%d, Dist:%d, Corr:%d, PWM:%d, dt:%d ms\r\n", 
                   (int)hpid.setpoint, (int)raw_dist, (int)pid_correction, (int)final_pwm, (int)(dt * 1000.0f));
         }

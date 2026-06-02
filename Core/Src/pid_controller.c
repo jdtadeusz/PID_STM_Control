@@ -17,40 +17,44 @@ void PID_Init(PID_TypeDef *pid, float kp, float ki, float kd, float min, float m
 }
 
 float PID_Compute(PID_TypeDef *pid, float current_val) {
-    // Obliczanie błędu 
-    // Dla czujnika na górze: duża odległość = piłeczka nisko = potrzeba wyższa prędkość
-    // Dlatego: error = measurement - setpoint (odwrócone)
     float error = current_val - pid->setpoint;
 
-    // P (proporcjonalny)
-    float P = pid->Kp * error;
+    // ANTI-WINDUP (Reset po minięciu celu)
+    if ((error > 0.0f && pid->last_error < 0.0f) || 
+        (error < 0.0f && pid->last_error > 0.0f)) {
+        
+    } else {
+        pid->integral += error * pid->dt; 
+    }
 
-    // I (całkujący) - z uwzględnieniem czasu próbkowania
+    // Człon P
+    float effective_kp;
+    if (error < 0) {
+        // Piłka zbyt wysoko — delikatnie zmniejsz gaz
+        effective_kp = pid->Kp * 0.4f;
+    } else {
+        // Piłka zbyt nisko — normalna reakcja
+        effective_kp = pid->Kp;
+    }
+
+    float P = effective_kp * error;
+    
+    // Człon I 
     pid->integral += error * pid->dt;
-    
-    // Ograniczenie całki (anti-windup)
-    if (pid->integral > pid->integral_limit) 
-        pid->integral = pid->integral_limit;
-    else if (pid->integral < -pid->integral_limit) 
-        pid->integral = -pid->integral_limit;
-    
+    if (pid->integral > pid->integral_limit) pid->integral = pid->integral_limit;
+    else if (pid->integral < -pid->integral_limit) pid->integral = -pid->integral_limit;
     float I = pid->Ki * pid->integral;
     
-    // D (różniczkujący) - z uwzględnieniem czasu próbkowania
-    // Używamy measurement derivative zamiast error derivative (lepiej dla noise)
-    float D = pid->Kd * (pid->last_measurement - current_val) / pid->dt;
+    // Człon D 
+    float D = -pid->Kd * (current_val - pid->last_measurement) / pid->dt;
     
     pid->last_error = error;
     pid->last_measurement = current_val;
 
-    // Suma składników PID
     float output = P + I + D;
 
-    // Nasycenie wyjścia
-    if (output > pid->out_max) 
-        output = pid->out_max;
-    else if (output < pid->out_min) 
-        output = pid->out_min;
+    if (output > pid->out_max) output = pid->out_max;
+    else if (output < pid->out_min) output = pid->out_min;
 
     return output;
 }

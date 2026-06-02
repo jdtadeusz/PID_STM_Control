@@ -61,7 +61,6 @@ uint16_t VL53L0X_ReadDistance(I2C_HandleTypeDef *hi2c) {
 
 void VL53L0X_StartContinous(I2C_HandleTypeDef *hi2c) {
     uint8_t start_cmd = 0x02; // 0x02 to Continuous Mode
-    // Zapisujemy 0x02 do rejestru 0x00
     HAL_I2C_Mem_Write(hi2c, VL53L0X_ADDR, 0x00, 1, &start_cmd, 1, 100);
 }
 
@@ -70,32 +69,28 @@ uint16_t VL53L0X_GetDistance(I2C_HandleTypeDef *hi2c) {
     uint8_t status = 0;
     uint8_t data[2];
 
-    // 1. Wyzwalanie pomiaru (Single Shot)
-    // Piszemy 0x01 do rejestru SYSRANGE_START (0x00)
+    // Single Shot
     if(HAL_I2C_Mem_Write(hi2c, VL53L0X_ADDR, 0x00, 1, &start_cmd, 1, 100) != HAL_OK) return 0;
 
-    // 2. Czekaj na bit "Start" aż zgaśnie (czujnik przyjął polecenie)
-    // To jest kluczowe! Czujnik musi przetrawić komendę startu.
+    // Czujnik przyjął polecenie
     uint32_t timeout = HAL_GetTick();
     while (HAL_GetTick() - timeout < 50) {
         HAL_I2C_Mem_Read(hi2c, VL53L0X_ADDR, 0x00, 1, &status, 1, 50);
         if (!(status & 0x01)) break; 
     }
 
-    // 3. Czekaj na gotowość danych (Interrupt Status)
-    // Rejestr RESULT_INTERRUPT_STATUS (0x13)
+    // Interrupt Status
     timeout = HAL_GetTick();
     while (HAL_GetTick() - timeout < 100) {
         HAL_I2C_Mem_Read(hi2c, VL53L0X_ADDR, 0x13, 1, &status, 1, 100);
         if (status & 0x07) break; // Bit 0, 1 lub 2 oznacza gotowość
     }
 
-    // 4. Odczytaj 2 bajty dystansu z RESULT_RANGE_STATUS (0x14) + offset 10 bajtów
-    // Czyli czytamy od 0x1E (0x14 + 10 bajtów to dokładnie 0x1E - tu miałeś rację!)
+    // 2 bajty dystansu z RESULT_RANGE_STATUS (0x14) + offset 10 bajtów
     if (HAL_I2C_Mem_Read(hi2c, VL53L0X_ADDR, 0x1E, 1, data, 2, 100) == HAL_OK) {
         uint16_t raw_dist = (uint16_t)((data[0] << 8) | data[1]);
 
-        // 5. Czyścimy przerwanie, żeby pozwolić na kolejny pomiar
+        // Czyszczenie przerwania
         uint8_t clear = 0x01;
         HAL_I2C_Mem_Write(hi2c, VL53L0X_ADDR, 0x0B, 1, &clear, 1, 100);
 
@@ -121,17 +116,17 @@ uint16_t VL53L0X_ReadContinuousFast(I2C_HandleTypeDef *hi2c) {
     uint8_t status = 0;
     uint8_t data[2];
 
-    // 1. Błyskawiczne sprawdzenie gotowości (Timeout tylko 2 ms!)
+    // Sprawdzanie gotowości 
     if (HAL_I2C_Mem_Read(hi2c, VL53L0X_ADDR, 0x13, 1, &status, 1, 2) != HAL_OK) return 0;
     
-    // Jeśli flaga gotowości (bity 0-2) nie jest podniesiona, uciekamy.
+    // Jeśli niegotowy - out 
     if ((status & 0x07) == 0) return 0; 
 
-    // 2. Czytamy gotowy wynik z rejestru 0x1E
+    // Czytanie wyniku
     if (HAL_I2C_Mem_Read(hi2c, VL53L0X_ADDR, 0x1E, 1, data, 2, 2) == HAL_OK) {
         uint16_t dist = (uint16_t)((data[0] << 8) | data[1]);
 
-        // 3. Czyścimy przerwanie, by czujnik robił kolejny pomiar
+        // Czyszczenie przerwania
         uint8_t clear = 0x01;
         HAL_I2C_Mem_Write(hi2c, VL53L0X_ADDR, 0x0B, 1, &clear, 1, 2);
 

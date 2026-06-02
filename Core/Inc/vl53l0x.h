@@ -9,7 +9,7 @@
 #define VL53L0X_ADDR (0x29 << 1)
 
 #define REG_SYSRANGE_START                              0x00
-#define REG_SYSTEM_INTERRUPT_CONFIG_GPIO                0x0A // <--- TEGO BRAKOWAŁO
+#define REG_SYSTEM_INTERRUPT_CONFIG_GPIO                0x0A 
 #define REG_RESULT_RANGE_STATUS                         0x14
 #define REG_RESULT_INTERRUPT_STATUS_GPIO                0x13
 #define REG_SYSTEM_INTERRUPT_CLEAR                      0x0B

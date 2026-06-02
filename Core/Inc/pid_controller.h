@@ -3,6 +3,7 @@
 
 #include <stdint.h>
 
+/* Struktura regulatora PID */
 typedef struct{
     // Nastawy
     float Kp; 
