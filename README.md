@@ -1,43 +1,43 @@
-# PID_STM_Control: System Lewitacji Aerodynamicznej
+# PID_STM_Control: Aerodynamic Levitation System
 
-![Status: Działa](https://img.shields.io/badge/Status-Dzia%C5%82a-success)
-![Język: C](https://img.shields.io/badge/J%C4%99zyk-C-blue)
-![Platforma: STM32](https://img.shields.io/badge/Platforma-STM32-orange)
+![Status: Active](https://img.shields.io/badge/Status-Active-success)
+![Language: C](https://img.shields.io/badge/Language-C-blue)
+![Platform: STM32](https://img.shields.io/badge/Platform-STM32-orange)
 
 <img width="260" height="462" alt="PID_Stm32" src="https://github.com/user-attachments/assets/bed42bfd-7802-4ef6-9be8-a41be049812e" />
 
 
-## Opis Projektu
+## Project Description
 
-PID_STM_Control to projekt embedded demonstrujący nieliniową regulację PID na mikrokontrolerze STM32. Celem układu jest precyzyjna, stabilna lewitacja bardzo lekkiej piłeczki (ok. 3g) wewnątrz 35-milimetrowej rury aerodynamicznej przy wykorzystaniu przemysłowego wentylatora sterowanego sygnałem PWM.
+PID_STM_Control is an embedded systems project demonstrating non-linear PID control on an STM32 microcontroller. The system aims to achieve precise and stable levitation of a lightweight ball (approx. 3g) inside a 35mm aerodynamic tube using an industrial PWM-controlled fan.
 
-Projekt rozwiązuje szereg rzeczywistych problemów inżynierskich, takich jak szum optyczny czujników, asymetria grawitacyjna czy nieliniowa dynamika płynów.
+The project successfully resolves several real-world engineering challenges, including hardware optical sensor noise, gravitational asymmetry, and non-linear fluid dynamics.
 
-## Rozwiązania Inżynierskie i Funkcjonalności
+## Engineering Solutions & Features
 
-Układ sterowania został napisany od zera i zawiera mechanizmy spotykane w przemysłowej automatyce:
+The control loop implementation was written entirely from scratch and incorporates advanced mechanisms typically found in industrial automation:
 
-* **Autorski, Równoległy Kontroler PID:** Własna implementacja algorytmu z konfigurowalnym czasem próbkowania (`dt`).
-* **Dynamiczny Feedforward (Gain Scheduling):** Adaptacyjna baza PWM kompensująca nieliniowość aerodynamiczną. Układ automatycznie zmienia punkt pracy w zależności od zadanego Setpointu (inna moc potrzebna na dole, inna na górze rury).
-* **Zero-Crossing Anti-Windup:** Mechanizm błyskawicznego resetowania członu całkującego w momencie przecięcia linii błędu, zapobiegający potężnym, opóźnionym przeregulowaniom.
-* **Asymetryczne Limity Nasycenia:** Oddzielne, dynamicznie strojone granice dla hamowania (spadek piłki) i przyspieszania (wznoszenie), chroniące przed uderzeniami obiektu o czujnik.
-* **Filtracja EMA (Exponential Moving Average):** Lekki, jednobiegunowy filtr dolnoprzepustowy niwelujący sprzętowy szum lasera ToF, zapewniający gładki sygnał dla członu różniczkującego ($K_d$).
+* **Custom Parallel PID Controller:** An in-house implementation of the control algorithm featuring a configurable loop sampling time (`dt`).
+* **Dynamic Feedforward (Gain Scheduling):** An adaptive PWM baseline that compensates for aerodynamic non-linearities. The system automatically shifts the operating point depending on the target Setpoint (varying baseline power required at the bottom vs. the top of the tube).
+* **Zero-Crossing Anti-Windup:** A mechanism that instantly resets the accumulated integral term the moment the error sign changes (crosses the setpoint), effectively eliminating massive, delayed overshoots.
+* **Asymmetric Saturation Limits:** Separate, dynamically tuned boundaries for braking (ball descending) and accelerating (ball ascending), preventing the object from violently crashing into the sensor at the top.
+* **EMA Filtering (Exponential Moving Average):** A lightweight, single-pole low-pass filter that effectively dampens the hardware noise inherent to the ToF laser sensor, providing a clean signal for the derivative term ($K_d$).
 
-## Architektura i Sprzęt
+## Architecture & Hardware
 
-* **Mikrokontroler:** STM32 (konfiguracja przez HAL)
-* **Aktuator:** Wentylator przemysłowy - ARCTIC S8038-10K z wbudowanym sterownikiem (sterowanie Timer PWM bezpośrednio do rejestrów)
-* **Czujnik:** Laserowy sensor odległości Time-of-Flight VL53L0X (komunikacja I2C, odczyt Continuous Fast)
-* **Telemetria:** Dwukierunkowa komunikacja UART z komputerem PC.
+* **Microcontroller:** STM32 (configured via HAL)
+* **Actuator:** Industrial fan - ARCTIC S8038-10K with a built-in driver (Timer PWM control mapped directly to registers)
+* **Sensor:** VL53L0X Time-of-Flight laser distance sensor (I2C communication, operating in Continuous Fast read mode)
+* **Telemetry:** Bi-directional UART serial communication with a host PC.
 
-## Telemetria w Czasie Rzeczywistym
+## Real-Time Telemetry
 
-Do projektu dołączony jest autorski skrypt w języku Python (`plot_pid.py`) wykorzystujący bibliotekę `matplotlib`. Narzędzie to działa jak cyfrowy oscyloskop, na bieżąco odbierając logi z mikrokontrolera przez port szeregowy i wizualizując:
-* Aktualną pozycję piłeczki na tle zadanego Setpointu.
-* Surowy sygnał sterujący PWM oraz wypracowaną korektę PID.
-* Dokładne wartości przesyłane co 50ms w interfejsie graficznym.
+The project includes a custom Python script (`plot_pid.py`) utilizing the `matplotlib` library. Operating like a digital oscilloscope, this tool captures incoming data from the microcontroller over the serial port every 50ms and visualizes:
+* The current position of the ball tracked against the active Setpoint.
+* The raw PWM output signal alongside the real-time PID correction factor.
+* Live numerical values embedded directly into the graphical interface headlines.
 
-## Technologie
+## Technologies
 * C / STM32 HAL API
 * I2C / PWM / UART
 * Python 3 (PySerial, Matplotlib, Regex)
